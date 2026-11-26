@@ -1,3 +1,12 @@
+import pandas as pd
+import streamlit as st
+
+st.set_page_config(
+    page_title="Multi-Asset Margin & Liquidation Simulator",
+    layout="wide",
+)
+
+
 def compute_margin_shortfall(
     position_value: float,
     margin_posted: float,
@@ -95,34 +104,32 @@ def run_cascade_simulation(
     return cascade_results
 
 
-if __name__ == "__main__":
-    sample_positions = [
-        {
-            "asset": "NIFTY_FUT",
-            "position_value": 1200000.0,
-            "margin_posted": 240000.0,
-            "maintenance_margin_rate": 0.25,
-        },
-        {
-            "asset": "BANKNIFTY_FUT",
-            "position_value": 1000000.0,
-            "margin_posted": 230000.0,
-            "maintenance_margin_rate": 0.25,
-        },
-        {
-            "asset": "USDINR_FUT",
-            "position_value": 800000.0,
-            "margin_posted": 220000.0,
-            "maintenance_margin_rate": 0.20,
-        },
-        {
-            "asset": "GOLD_FUT",
-            "position_value": 600000.0,
-            "margin_posted": 180000.0,
-            "maintenance_margin_rate": 0.20,
-        },
-    ]
+st.title("Multi-Asset Margin & Liquidation Simulator")
+st.write("Simulate margin shortfalls, liquidation tiers, and cascade contagion across assets.")
 
-    output = run_cascade_simulation(sample_positions)
-    for record in output:
-        print(record)
+base_shock_pct = st.sidebar.slider("Base Price Shock", min_value=-0.45, max_value=0.0, value=-0.18, step=0.01)
+base_volatility = st.sidebar.slider("Base Volatility Factor", min_value=1.0, max_value=4.0, value=1.6, step=0.1)
+cascade_spillover_step = st.sidebar.slider("Cascade Spillover Step", min_value=0.0, max_value=0.15, value=0.04, step=0.01)
+
+sample_positions = [
+    {"asset": "NIFTY_FUT", "position_value": 1200000.0, "margin_posted": 240000.0, "maintenance_margin_rate": 0.25},
+    {"asset": "BANKNIFTY_FUT", "position_value": 1000000.0, "margin_posted": 230000.0, "maintenance_margin_rate": 0.25},
+    {"asset": "USDINR_FUT", "position_value": 800000.0, "margin_posted": 220000.0, "maintenance_margin_rate": 0.20},
+    {"asset": "GOLD_FUT", "position_value": 600000.0, "margin_posted": 180000.0, "maintenance_margin_rate": 0.20},
+]
+
+output = run_cascade_simulation(
+    sample_positions,
+    base_shock_pct=base_shock_pct,
+    base_volatility=base_volatility,
+    cascade_spillover_step=cascade_spillover_step,
+)
+
+df_output = pd.DataFrame(output)
+
+col1, col2, col3 = st.columns(3)
+col1.metric("Total Margin Shortfall", f"₹{df_output['margin_shortfall'].sum():,.2f}")
+col2.metric("Liquidations Triggered", int((df_output["tier"] == "FULL_LIQUIDATION").sum()))
+col3.metric("Max Contagion Applied", f"{df_output['contagion_applied'].max():.2%}")
+
+st.dataframe(df_output, use_container_width=True)
